@@ -7,6 +7,7 @@ Implements the view controller for the camera interface.
 
 import UIKit
 import AVFoundation
+import VideoToolbox
 import Photos
 
 class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelegate {
@@ -167,11 +168,40 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
     
     private var setupResult: SessionSetupResult = .success
     
+    private var audioDataOutput: AVCaptureAudioDataOutput!
+    private var videoDataOutput: AVCaptureVideoDataOutput!
+    
     @objc dynamic var videoDeviceInput: AVCaptureDeviceInput!
     
     @IBOutlet private weak var previewView: PreviewView!
     
     // Call this on the session queue.
+    fileprivate func setFormat() {
+        var bestFormat: AVCaptureDevice.Format?
+        var bestFramerate: AVFrameRateRange?
+        let videoDevice = self.videoDeviceInput.device
+        
+        for format in videoDevice.formats {
+            for framerate in format.videoSupportedFrameRateRanges {
+                if (framerate.maxFrameRate > bestFramerate?.maxFrameRate ?? 0.0) || ((framerate.maxFrameRate == bestFramerate?.maxFrameRate ?? 0.0) &&
+                    (format.highResolutionStillImageDimensions.height > bestFormat?.highResolutionStillImageDimensions.height ?? 0)) {
+                    bestFormat = format
+                    bestFramerate = framerate
+                }
+            }
+        }
+        do {
+            try videoDevice.lockForConfiguration()
+        } catch {
+            print("Could not lock device for configuration (my code): \(error)")
+        }
+        videoDevice.activeFormat = bestFormat!
+        videoDevice.activeVideoMaxFrameDuration = bestFramerate!.minFrameDuration
+        videoDevice.activeVideoMinFrameDuration = bestFramerate!.minFrameDuration
+        videoDevice.unlockForConfiguration()
+        print(bestFormat!)
+    }
+    
     /// - Tag: ConfigureSession
     private func configureSession() {
         if setupResult != .success {
@@ -250,41 +280,45 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
         
         let movieFileOutput = AVCaptureMovieFileOutput()
         
-        if self.session.canAddOutput(movieFileOutput) {
-            self.session.addOutput(movieFileOutput)
-            self.session.sessionPreset = .high
+        if session.canAddOutput(movieFileOutput) {
+            session.addOutput(movieFileOutput)
+            session.sessionPreset = .high
             
-            var bestFormat: AVCaptureDevice.Format?
-            var bestFramerate: AVFrameRateRange?
-            let videoDevice = self.videoDeviceInput.device
+            setFormat()
             
-            for format in videoDevice.formats {
-                for framerate in format.videoSupportedFrameRateRanges {
-                    if (framerate.maxFrameRate > bestFramerate?.maxFrameRate ?? 0.0) || ((framerate.maxFrameRate == bestFramerate?.maxFrameRate ?? 0.0) &&
-                        (format.highResolutionStillImageDimensions.height > bestFormat?.highResolutionStillImageDimensions.height ?? 0)) {
-                        bestFormat = format
-                        bestFramerate = framerate
-                    }
-                }
-            }
-            do {
-                try videoDevice.lockForConfiguration()
-            } catch {
-                print("Could not lock device for configuration (my code): \(error)")
-            }
-            videoDevice.activeFormat = bestFormat!
-            videoDevice.activeVideoMaxFrameDuration = bestFramerate!.minFrameDuration
-            videoDevice.activeVideoMinFrameDuration = bestFramerate!.minFrameDuration
-            videoDevice.unlockForConfiguration()
-            print(bestFormat!)
-            
-            if let connection = movieFileOutput.connection(with: .video) {
-                if connection.isVideoStabilizationSupported {
-                    connection.preferredVideoStabilizationMode = .auto
-                }
-            }
+//            if let connection = movieFileOutput.connection(with: .video) {
+//                if connection.isVideoStabilizationSupported {
+//                    connection.preferredVideoStabilizationMode = .auto
+//                }
+//            }
             
             self.movieFileOutput = movieFileOutput
+
+            /*
+            let videoDataOutput = AVCaptureVideoDataOutput()
+            print(videoDataOutput.availableVideoCodecTypes)
+            print(videoDataOutput.availableVideoCodecTypes)
+            videoDataOutput.videoSettings = [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            ]
+            videoDataOutput.alwaysDiscardsLateVideoFrames = true
+            if session.canAddOutput(videoDataOutput) {
+                videoDataOutput.setSampleBufferDelegate(self, queue: sessionQueue)
+                session.addOutput(videoDataOutput)
+            } else {
+                print("zonk1")
+            }
+            self.videoDataOutput = videoDataOutput
+            
+            let audioDataOutput = AVCaptureAudioDataOutput()
+            if session.canAddOutput(audioDataOutput) {
+                audioDataOutput.setSampleBufferDelegate(self, queue: sessionQueue)
+                session.addOutput(audioDataOutput)
+            } else {
+                print("zonk2")
+            }
+            self.audioDataOutput = audioDataOutput
+*/
             
             DispatchQueue.main.async {
                 self.recordButton.isEnabled = true
@@ -367,12 +401,41 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
     // MARK: Recording Movies
     
     private var movieFileOutput: AVCaptureMovieFileOutput?
-    
+    private var movieFileOutput2: AVCaptureMovieFileOutput?
+
     private var backgroundRecordingID: UIBackgroundTaskIdentifier?
     
     @IBOutlet private weak var recordButton: UIButton!
     
     @IBOutlet private weak var resumeButton: UIButton!
+    
+    var isRecording: Bool = false
+//    var conpressionSession : VTCompressionSession
+    
+    fileprivate func startRecording() {
+        
+        if UIDevice.current.isMultitaskingSupported {
+            self.backgroundRecordingID = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
+        }
+        
+        let movieFileOutput = self.movieFileOutput!
+        // Update the orientation on the movie file output video connection before recording.
+        let movieFileOutputConnection = movieFileOutput.connection(with: .video)
+//        let videoPreviewLayerOrientation = previewView.videoPreviewLayer.connection?.videoOrientation
+        movieFileOutputConnection?.videoOrientation = AVCaptureVideoOrientation(deviceOrientation: UIDevice.current.orientation)! //videoPreviewLayerOrientation!
+        
+        let availableVideoCodecTypes = movieFileOutput.availableVideoCodecTypes
+        
+        if availableVideoCodecTypes.contains(.hevc) {
+            movieFileOutput.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.hevc], for: movieFileOutputConnection!)
+        }
+        
+        // Start recording video to a temporary file.
+        let outputFileName = NSUUID().uuidString
+        let outputFilePath = (NSTemporaryDirectory() as NSString).appendingPathComponent((outputFileName as NSString).appendingPathExtension("mov")!)
+        print("will be recording to \(outputFilePath)")
+        movieFileOutput.startRecording(to: URL(fileURLWithPath: outputFilePath), recordingDelegate: self)
+    }
     
     @IBAction private func toggleMovieRecording(_ recordButton: UIButton) {
         guard let movieFileOutput = self.movieFileOutput else {
@@ -387,31 +450,44 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
          */
         recordButton.isEnabled = false
         
-        let videoPreviewLayerOrientation = previewView.videoPreviewLayer.connection?.videoOrientation
-        
         sessionQueue.async {
-            if !movieFileOutput.isRecording {
-                if UIDevice.current.isMultitaskingSupported {
-                    self.backgroundRecordingID = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
-                }
+            if !self.isRecording {
                 
-                // Update the orientation on the movie file output video connection before recording.
-                let movieFileOutputConnection = movieFileOutput.connection(with: .video)
-                movieFileOutputConnection?.videoOrientation = videoPreviewLayerOrientation!
                 
-                let availableVideoCodecTypes = movieFileOutput.availableVideoCodecTypes
+         /*
                 
-                if availableVideoCodecTypes.contains(.hevc) {
-                    movieFileOutput.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.hevc], for: movieFileOutputConnection!)
-                }
+                self.conpressionSession = VTCompressionSession.new(width: 1920,
+                                                                               height: 1080,
+                                                                               codec: kCMVideoCodecType_H264,
+                                                                               callback: callback)
                 
-                // Start recording video to a temporary file.
-                let outputFileName = NSUUID().uuidString
-                let outputFilePath = (NSTemporaryDirectory() as NSString).appendingPathComponent((outputFileName as NSString).appendingPathExtension("mov")!)
-               
-                movieFileOutput.startRecording(to: URL(fileURLWithPath: outputFilePath), recordingDelegate: self)
+                self.conpressionSession.isRealtime = true
+                self.conpressionSession.profile = kVTProfileLevel_H264_Extended_AutoLevel
+                self.conpressionSession.averageBitrate = 1000000
+                self.conpressionSession.maxKeyframeIntervalDuration = 1
                 
+                self.conpressionSession.prepare()
+                
+                
+                var compressionSession: VTCompressionSession
+                VTCompressionSessionCreate(
+                    allocator: kCFAllocatorDefault,
+                    width: 1920, height: 1080, codecType: kCMVideoCodecType_H264,
+                    encoderSpecification: NULL as! CFDictionary, imageBufferAttributes: NULL as! CFDictionary,
+                    compressedDataAllocator: kCFAllocatorDefault,
+                    outputCallback: self,
+                    refcon: self,
+                    compressionSessionOut: compressionSession)
+
+                
+             */
+                print ("starting")
+                self.isRecording = true
+                self.startRecording()
+
             } else {
+                print ("stoping")
+                self.isRecording = false
                 movieFileOutput.stopRecording()
             }
         }
@@ -420,6 +496,7 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
     /// - Tag: DidStartRecording
     func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL, from connections: [AVCaptureConnection]) {
         // Enable the Record button to let the user stop recording.
+        print("recording to \(fileURL)")
         DispatchQueue.main.async {
             self.recordButton.isEnabled = true
             self.recordButton.setImage(#imageLiteral(resourceName: "CaptureStop"), for: [])
@@ -431,6 +508,7 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
                     didFinishRecordingTo outputFileURL: URL,
                     from connections: [AVCaptureConnection],
                     error: Error?) {
+        
         // Note: Since we use a unique file path for each recording, a new recording won't overwrite a recording mid-save.
         func cleanup() {
             let path = outputFileURL.path
@@ -444,7 +522,7 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
             
             if let currentBackgroundRecordingID = backgroundRecordingID {
                 backgroundRecordingID = UIBackgroundTaskIdentifier.invalid
-                
+
                 if currentBackgroundRecordingID != UIBackgroundTaskIdentifier.invalid {
                     UIApplication.shared.endBackgroundTask(currentBackgroundRecordingID)
                 }
@@ -481,6 +559,11 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
             }
         } else {
             cleanup()
+        }
+        
+        if success {
+            self.isRecording = true
+            self.startRecording()
         }
         
         // Enable the Camera and Record buttons to let the user switch camera and start another recording.
@@ -698,5 +781,26 @@ extension AVCaptureDevice.DiscoverySession {
         }
         
         return uniqueDevicePositions.count
+    }
+}
+
+
+extension CameraViewController:
+    AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
+    //There is only one same method for both of these delegates
+    func captureOutput(_ captureOutput: AVCaptureOutput, didOutput: CMSampleBuffer, from: AVCaptureConnection) {
+        if self.isRecording {
+       
+            
+//        if(captureOutput == self.audioDataOutput) {print ("audio")}
+//        if(captureOutput == self.videoDataOutput) {print ("video")}
+        }
+    }
+    
+    func captureOutput(_ captureOutput: AVCaptureOutput,
+                       didDrop sampleBuffer: CMSampleBuffer,
+                       from connection: AVCaptureConnection) {
+        if(captureOutput == self.audioDataOutput) {print ("drop audio")}
+        if(captureOutput == self.videoDataOutput) {print ("drop video")}
     }
 }
