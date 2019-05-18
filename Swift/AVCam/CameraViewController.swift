@@ -417,21 +417,18 @@ class CameraViewController: UIViewController {
             print ("settting up writer to \(url.lastPathComponent)")
 
             let videoWriter = try AVAssetWriter(outputURL: url, fileType: AVFileType.mov)
-        
-            let settings = self.videoDataOutput.recommendedVideoSettings(forVideoCodecType: AVVideoCodecType.h264, assetWriterOutputFileType: AVFileType.mov)
-            let videoWriterInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: settings as? [String : Any])
+
+            let videoSettings = self.videoDataOutput.recommendedVideoSettingsForAssetWriter(writingTo: AVFileType.mov)
+            let videoWriterInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: videoSettings)
             videoWriterInput.expectsMediaDataInRealTime = true //Make sure we are exporting data at realtime
             if videoWriter.canAdd(videoWriterInput) {
                 videoWriter.add(videoWriterInput)
             }
             
             //Add audio input
-            let audioWriterInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVNumberOfChannelsKey: 1,
-                AVSampleRateKey: 44100,
-                AVEncoderBitRateKey: 64000,
-                ])
+            let audioSettings = self.audioDataOutput.recommendedAudioSettingsForAssetWriter(writingTo: .mov)
+
+            let audioWriterInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: audioSettings as? [String : Any])
             audioWriterInput.expectsMediaDataInRealTime = true
             if videoWriter.canAdd(audioWriterInput) {
                 videoWriter.add(audioWriterInput)
@@ -493,7 +490,10 @@ class CameraViewController: UIViewController {
     }
     fileprivate func storeVideo(url: URL) {
         PHPhotoLibrary.shared().performChanges({
-            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+            let options = PHAssetResourceCreationOptions()
+            options.shouldMoveFile = true
+            let creationRequest = PHAssetCreationRequest.forAsset()
+            creationRequest.addResource(with: .video, fileURL: url, options: options)
         }) { completed, error in
             if completed {
                 print("Video \(url.lastPathComponent) moved to camera roll")
@@ -536,8 +536,9 @@ class CameraViewController: UIViewController {
             self.finishFileRecording(i: 1)
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                if self.videoUrl[0] != nil {self.storeVideo(url: self.videoUrl[0]!)}
-                if self.videoUrl[1] != nil {self.storeVideo(url: self.videoUrl[1]!)}
+                let i = self.n!
+                if self.videoUrl[(i+1)%2] != nil {self.storeVideo(url: self.videoUrl[(i+1)%2]!)}
+                if self.videoUrl[i] != nil {self.storeVideo(url: self.videoUrl[i]!)}
                 self.videoUrl[0] = nil
                 self.videoUrl[1] = nil
 
