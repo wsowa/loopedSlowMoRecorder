@@ -418,15 +418,8 @@ class CameraViewController: UIViewController {
 
             let videoWriter = try AVAssetWriter(outputURL: url, fileType: AVFileType.mov)
         
-            let videoWriterInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: [
-                AVVideoCodecKey: AVVideoCodecType.hevc,
-                AVVideoWidthKey: self.videoDeviceInput.device.activeFormat.highResolutionStillImageDimensions.width,
-                AVVideoHeightKey: self.videoDeviceInput.device.activeFormat.highResolutionStillImageDimensions.height,
-                AVVideoCompressionPropertiesKey: [
-//                    AVVideoAverageBitRateKey: 1280*720*11.4
-                    AVVideoAverageBitRateKey: 1920*1080*11.4
-                ],
-                ])
+            let settings = self.videoDataOutput.recommendedVideoSettings(forVideoCodecType: AVVideoCodecType.h264, assetWriterOutputFileType: AVFileType.mov)
+            let videoWriterInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: settings as? [String : Any])
             videoWriterInput.expectsMediaDataInRealTime = true //Make sure we are exporting data at realtime
             if videoWriter.canAdd(videoWriterInput) {
                 videoWriter.add(videoWriterInput)
