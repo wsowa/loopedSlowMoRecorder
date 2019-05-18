@@ -15,7 +15,9 @@ class CameraViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        UIApplication.shared.isIdleTimerDisabled = true
+
         // Disable UI. Enable the UI later, if and only if the session starts running.
         recordButton.isEnabled = false
         
@@ -421,7 +423,8 @@ class CameraViewController: UIViewController {
                 AVVideoWidthKey: self.videoDeviceInput.device.activeFormat.highResolutionStillImageDimensions.width,
                 AVVideoHeightKey: self.videoDeviceInput.device.activeFormat.highResolutionStillImageDimensions.height,
                 AVVideoCompressionPropertiesKey: [
-                    AVVideoAverageBitRateKey: 23000000,
+//                    AVVideoAverageBitRateKey: 1280*720*11.4
+                    AVVideoAverageBitRateKey: 1920*1080*11.4
                 ],
                 ])
             videoWriterInput.expectsMediaDataInRealTime = true //Make sure we are exporting data at realtime
@@ -480,7 +483,7 @@ class CameraViewController: UIViewController {
         DispatchQueue.main.async {
             self.recordButton.isEnabled = true
             self.recordButton.setImage(#imageLiteral(resourceName: "CaptureStop"), for: [])
-            self.switchOverTimer = Timer.scheduledTimer(withTimeInterval: 6, repeats: true) {_ in
+            self.switchOverTimer = Timer.scheduledTimer(withTimeInterval: 120, repeats: true) {_ in
                 self.switchOver()
             }
         }
@@ -504,6 +507,8 @@ class CameraViewController: UIViewController {
             }
             
             if error != nil {
+                print(error.debugDescription)
+                print(error)
                 print ("ERROR:::Cannot move the video \(url.lastPathComponent) to camera roll, error: \(error!.localizedDescription)")
                 self.deleteFile(url: url)
             }
@@ -678,6 +683,10 @@ class CameraViewController: UIViewController {
                                                name: .AVCaptureSessionRuntimeError,
                                                object: session)
         
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(batteryStateDidChange),
+                                               name: UIDevice.batteryStateDidChangeNotification, object: nil)
+
         /*
          A session can only run when the app is full screen. It will be interrupted
          in a multi-app layout, introduced in iOS 9, see also the documentation of
@@ -702,6 +711,20 @@ class CameraViewController: UIViewController {
             keyValueObservation.invalidate()
         }
         keyValueObservations.removeAll()
+    }
+    
+    @objc
+    func batteryStateDidChange(_ notification: Notification) {
+        switch UIDevice.current.batteryState {
+        case .unplugged:
+            print("Charger unplugged!")
+            if (isRecording) {
+                DispatchQueue.main.asyncAfter(deadline: .now()+3) {
+                    self.stopRecording()
+                }
+            }
+            default: break
+        }
     }
     
     @objc
@@ -811,6 +834,7 @@ class CameraViewController: UIViewController {
     }
     var d: Int! = 0
     var f: Int! = 0
+    var wf: Int! = 0
     var n: Int! = 0
 }
 
@@ -868,23 +892,22 @@ extension CameraViewController:
         if writable, captureOutput == videoDataOutput {
             
             if videoWriterInput[i]!.isReadyForMoreMediaData {
+                wf+=1
                 videoWriterInput[i]!.append(didOutput)
             }
         } else if writable, captureOutput == audioDataOutput, audioWriterInput[i]!.isReadyForMoreMediaData {
+            wf+=1
             audioWriterInput[i]!.append(didOutput)
         }
     }
 
     func captureOutput(_ captureOutput: AVCaptureOutput, didOutput: CMSampleBuffer, from: AVCaptureConnection) {
         f+=1
-        guard captureOutput != nil,
-            didOutput != nil,
-            from != nil,
-            CMSampleBufferDataIsReady(didOutput) else { return }
+        guard CMSampleBufferDataIsReady(didOutput) else { return }
         
         write(didOutput, captureOutput, i: n)
 
-        if ((f+d) % 1000 == 0) {print ("\(f)/\(d)")}
+        if ((f+d) % 1000 == 0) {print ("\(f+d)/\(d+0)/\(wf+0)")}
     }
     
     func captureOutput(_ captureOutput: AVCaptureOutput,
