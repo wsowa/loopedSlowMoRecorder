@@ -10,7 +10,7 @@ import AVFoundation
 import VideoToolbox
 import Photos
 
-class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelegate {
+class CameraViewController: UIViewController {
     // MARK: View Controller Life Cycle
     
     override func viewDidLoad() {
@@ -394,6 +394,7 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
     @IBOutlet private weak var resumeButton: UIButton!
     
     var isRecording: Bool = false
+    var switchOverTimer: Timer? = nil
     var videoWriter: [AVAssetWriter?] = [nil, nil]
     var videoWriterInput: [AVAssetWriterInput?] = [nil, nil]
     var audioWriterInput: [AVAssetWriterInput?] = [nil, nil]
@@ -411,6 +412,8 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
             let outputFileName = NSUUID().uuidString
             let outputFilePath = (NSTemporaryDirectory() as NSString).appendingPathComponent((outputFileName as NSString).appendingPathExtension("mov")!)
             let url = URL(fileURLWithPath: outputFilePath)
+            print ("settting up writer to \(url.lastPathComponent)")
+
             let videoWriter = try AVAssetWriter(outputURL: url, fileType: AVFileType.mov)
         
             let videoWriterInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: [
@@ -440,6 +443,7 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
             
             videoWriter.startWriting() //Means ready to write down the file
             
+            self.sessionAtSourceTime[i] = nil
             self.videoWriter[i] = videoWriter
             self.videoWriterInput[i] = videoWriterInput
             self.audioWriterInput[i] = audioWriterInput
@@ -449,68 +453,102 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
             debugPrint(error.localizedDescription)
         }
     }
-    
-    fileprivate func startRecording() {
+    fileprivate func switchOver() {
+        print ("switchOver")
+        let current = n
+        let next = (n+1) % 2
+        let prevUrl: URL! = self.videoUrl[next] ?? nil
         
-        if UIDevice.current.isMultitaskingSupported {
-            self.backgroundRecordingID = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
+        self.setupWriter(i: next)
+        self.n = next
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            self.finishFileRecording(i: current!)
+            if prevUrl != nil { self.deleteFile(url: prevUrl!) }
         }
         
-        self.isRecording = true
-        self.sessionAtSourceTime[0] = nil
-        self.setupWriter(i: 0)
-        self.sessionAtSourceTime[1] = nil
-        self.setupWriter(i: 1)
+    }
+    fileprivate func startRecording() {
+        print ("starting")
+
+//        if UIDevice.current.isMultitaskingSupported {
+//            self.backgroundRecordingID = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
+//        }
         
+        self.setupWriter(i: n)
+        self.isRecording = true
+
         DispatchQueue.main.async {
             self.recordButton.isEnabled = true
             self.recordButton.setImage(#imageLiteral(resourceName: "CaptureStop"), for: [])
+            self.switchOverTimer = Timer.scheduledTimer(withTimeInterval: 6, repeats: true) {_ in
+                self.switchOver()
+            }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now()+5) {
-            self.n = 1
-        }
-//        let movieFileOutput = self.movieFileOutput!
-//        // Update the orientation on the movie file output video connection before recording.
-//        let movieFileOutputConnection = movieFileOutput.connection(with: .video)
-////        let videoPreviewLayerOrientation = previewView.videoPreviewLayer.connection?.videoOrientation
-//        movieFileOutputConnection?.videoOrientation = AVCaptureVideoOrientation(deviceOrientation: UIDevice.current.orientation)! //videoPreviewLayerOrientation!
-//
-//        let availableVideoCodecTypes = movieFileOutput.availableVideoCodecTypes
-//
-//        if availableVideoCodecTypes.contains(.hevc) {
-//            movieFileOutput.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.hevc], for: movieFileOutputConnection!)
-//        }
-//
-//        // Start recording video to a temporary file.
-//        let outputFileName = NSUUID().uuidString
-//        let outputFilePath = (NSTemporaryDirectory() as NSString).appendingPathComponent((outputFileName as NSString).appendingPathExtension("mov")!)
-//        print("will be recording to \(outputFilePath)")
-//        movieFileOutput.startRecording(to: URL(fileURLWithPath: outputFilePath), recordingDelegate: self)
     }
-    func stopRecording(i: Int) {
-        
-        self.videoWriterInput[i]!.markAsFinished()
-        self.videoWriter[i]!.finishWriting {
+    fileprivate func deleteFile(url: URL) {
+        print ("about to delete \(url.lastPathComponent)")
+
+        do {
+            try FileManager.default.removeItem(at: url)
+            print ("deleted \(url.lastPathComponent)")
+        } catch {
+            print("Could not remove file at url: \(url.lastPathComponent)")
+        }
+    }
+    fileprivate func storeVideo(url: URL) {
+        PHPhotoLibrary.shared().performChanges({
+            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+        }) { completed, error in
+            if completed {
+                print("Video \(url.lastPathComponent) moved to camera roll")
+            }
             
-            if self.videoWriter[i]!.status == AVAssetWriter.Status.completed {
-                print("DEBUG:::The videoWriter status is completed")
-                
-                PHPhotoLibrary.shared().performChanges({
-                    PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: self.videoUrl[i]!)
-                    }) { completed, error in
-                        if completed {
-                            print("Video \(String(describing: self.videoUrl)) has been moved to camera roll")
-                        }
-                        
-                        if error != nil {
-                            print ("ERROR:::Cannot move the video \(String(describing: self.videoUrl[i])) to camera roll, error: \(error!.localizedDescription)")
-                        }
-                    }
-                } else {
-                print("WARN:::The videoWriter status is not completed, stauts: \(self.videoWriter[i]!.status)")
-                }
+            if error != nil {
+                print ("ERROR:::Cannot move the video \(url.lastPathComponent) to camera roll, error: \(error!.localizedDescription)")
+                self.deleteFile(url: url)
+            }
         }
     }
+    
+    func finishFileRecording(i: Int) {
+        if self.sessionAtSourceTime[i] != nil {
+            self.sessionAtSourceTime[i] = nil
+            let url = self.videoUrl[i]!
+            self.videoWriterInput[i]!.markAsFinished()
+            print("wrriting \(url.lastPathComponent)")
+            self.videoWriter[i]!.finishWriting {
+                if self.videoWriter[i]!.status == AVAssetWriter.Status.completed {
+                    print("wrriting completed for \(url.lastPathComponent)")
+                } else {
+                    let status = self.videoWriter[i]!.status.rawValue
+                    let error = self.videoWriter[i]!.error
+                    print("WARN:::writing failed for \(url.lastPathComponent), stauts: \(status), error: \(String(describing: error))")
+                    self.deleteFile(url: url)
+                }
+            }
+        }
+    }
+    fileprivate func stopRecording() {
+        print ("stoping")
+        self.isRecording = false
+        self.switchOverTimer?.invalidate()
+        self.switchOverTimer = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            self.finishFileRecording(i: 0)
+            self.finishFileRecording(i: 1)
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                if self.videoUrl[0] != nil {self.storeVideo(url: self.videoUrl[0]!)}
+                if self.videoUrl[1] != nil {self.storeVideo(url: self.videoUrl[1]!)}
+                self.videoUrl[0] = nil
+                self.videoUrl[1] = nil
+
+                self.recordButton.isEnabled = true
+                self.recordButton.setImage(#imageLiteral(resourceName: "CaptureVideo"), for: [])
+            }
+        }
+    }
+    
     @IBAction private func toggleMovieRecording(_ recordButton: UIButton) {
         /*
          Disable the Camera button until recording finishes, and disable
@@ -520,58 +558,15 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
          */
         recordButton.isEnabled = false
         
-        sessionQueue.async {
+        DispatchQueue.main.async {
             if !self.isRecording {
-                
-                
-         /*
-                
-                self.conpressionSession = VTCompressionSession.new(width: 1920,
-                                                                               height: 1080,
-                                                                               codec: kCMVideoCodecType_H264,
-                                                                               callback: callback)
-                
-                self.conpressionSession.isRealtime = true
-                self.conpressionSession.profile = kVTProfileLevel_H264_Extended_AutoLevel
-                self.conpressionSession.averageBitrate = 1000000
-                self.conpressionSession.maxKeyframeIntervalDuration = 1
-                
-                self.conpressionSession.prepare()
-                
-                
-                var compressionSession: VTCompressionSession
-                VTCompressionSessionCreate(
-                    allocator: kCFAllocatorDefault,
-                    width: 1920, height: 1080, codecType: kCMVideoCodecType_H264,
-                    encoderSpecification: NULL as! CFDictionary, imageBufferAttributes: NULL as! CFDictionary,
-                    compressedDataAllocator: kCFAllocatorDefault,
-                    outputCallback: self,
-                    refcon: self,
-                    compressionSessionOut: compressionSession)
-
-                
-             */
-                print ("starting")
-                self.isRecording = true
                 self.startRecording()
-
             } else {
-                print ("stoping")
-                self.isRecording = false
-                self.stopRecording(i: 0)
-                self.stopRecording(i: 1)
-                self.sessionAtSourceTime[0] = nil
-                self.sessionAtSourceTime[1] = nil
-
-                DispatchQueue.main.async {
-                    // Only enable the ability to change camera if the device has more than one camera.
-                    self.recordButton.isEnabled = true
-                    self.recordButton.setImage(#imageLiteral(resourceName: "CaptureVideo"), for: [])
-                }
+                self.stopRecording()
             }
         }
     }
-    
+    /*
     /// - Tag: DidStartRecording
     func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL, from connections: [AVCaptureConnection]) {
         // Enable the Record button to let the user stop recording.
@@ -652,7 +647,7 @@ class CameraViewController: UIViewController, AVCaptureFileOutputRecordingDelega
             self.recordButton.setImage(#imageLiteral(resourceName: "CaptureVideo"), for: [])
         }
     }
-    
+    */
     // MARK: KVO and Notifications
     
     private var keyValueObservations = [NSKeyValueObservation]()
@@ -898,4 +893,5 @@ extension CameraViewController:
         
         d+=1
     }
+    
 }
