@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		76AC85BD218785DD00DB92D2 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 76AC85BC218785DD00DB92D2 /* README.md */; };
 		7AA677151CFF765600B353FB /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA677141CFF765600B353FB /* AppDelegate.swift */; };
 		7AA677171CFF765600B353FB /* CameraViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA677161CFF765600B353FB /* CameraViewController.swift */; };
 		7AA6771A1CFF765600B353FB /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 7AA677181CFF765600B353FB /* Main.storyboard */; };
@@ -17,10 +16,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		25640DF025640BF000000001 /* SampleCode.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = SampleCode.xcconfig; path = ../Configuration/SampleCode.xcconfig; sourceTree = "<group>"; };
-		2762AA502762AA1000000001 /* LICENSE.txt */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
-		76AC85BC218785DD00DB92D2 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = ../README.md; sourceTree = "<group>"; };
-		7AA677111CFF765600B353FB /* AVCam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AVCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		716EF64F22920EEC0095A264 /* AVCam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AVCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7AA677141CFF765600B353FB /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7AA677161CFF765600B353FB /* CameraViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraViewController.swift; sourceTree = "<group>"; };
 		7AA677191CFF765600B353FB /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
@@ -41,40 +37,12 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		2563FCD02563FC9000000001 /* Configuration */ = {
-			isa = PBXGroup;
-			children = (
-				25640DF025640BF000000001 /* SampleCode.xcconfig */,
-			);
-			name = Configuration;
-			sourceTree = "<group>";
-		};
-		27629270276291C000000001 /* LICENSE */ = {
-			isa = PBXGroup;
-			children = (
-				2762AA502762AA1000000001 /* LICENSE.txt */,
-			);
-			name = LICENSE;
-			path = ../LICENSE;
-			sourceTree = "<group>";
-		};
 		7AA677081CFF765500B353FB = {
 			isa = PBXGroup;
 			children = (
-				76AC85BC218785DD00DB92D2 /* README.md */,
 				7AA677131CFF765600B353FB /* AVCam */,
-				7AA677121CFF765600B353FB /* Products */,
-				2563FCD02563FC9000000001 /* Configuration */,
-				27629270276291C000000001 /* LICENSE */,
+				716EF64F22920EEC0095A264 /* AVCam.app */,
 			);
-			sourceTree = "<group>";
-		};
-		7AA677121CFF765600B353FB /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				7AA677111CFF765600B353FB /* AVCam.app */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 		7AA677131CFF765600B353FB /* AVCam */ = {
@@ -108,7 +76,7 @@
 			);
 			name = AVCam;
 			productName = AVCam;
-			productReference = 7AA677111CFF765600B353FB /* AVCam.app */;
+			productReference = 716EF64F22920EEC0095A264 /* AVCam.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -138,7 +106,7 @@
 				Base,
 			);
 			mainGroup = 7AA677081CFF765500B353FB;
-			productRefGroup = 7AA677121CFF765600B353FB /* Products */;
+			productRefGroup = 7AA677081CFF765500B353FB;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -154,7 +122,6 @@
 			files = (
 				7AA6771F1CFF765600B353FB /* LaunchScreen.storyboard in Resources */,
 				7AA6771C1CFF765600B353FB /* Assets.xcassets in Resources */,
-				76AC85BD218785DD00DB92D2 /* README.md in Resources */,
 				7AA6771A1CFF765600B353FB /* Main.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -196,7 +163,6 @@
 /* Begin XCBuildConfiguration section */
 		7AA677211CFF765600B353FB /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 25640DF025640BF000000001 /* SampleCode.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -256,7 +222,6 @@
 		};
 		7AA677221CFF765600B353FB /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 25640DF025640BF000000001 /* SampleCode.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -309,7 +274,6 @@
 		};
 		7AA677241CFF765600B353FB /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 25640DF025640BF000000001 /* SampleCode.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -328,7 +292,6 @@
 		};
 		7AA677251CFF765600B353FB /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 25640DF025640BF000000001 /* SampleCode.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
