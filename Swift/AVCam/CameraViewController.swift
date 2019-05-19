@@ -466,7 +466,15 @@ class CameraViewController: UIViewController {
 //        if UIDevice.current.isMultitaskingSupported {
 //            self.backgroundRecordingID = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
 //        }
-        
+        do {
+            try self.videoDeviceInput.device.lockForConfiguration()
+            self.videoDeviceInput.device.torchMode = .on
+            try self.videoDeviceInput.device.setTorchModeOn(level: 1.0)
+        } catch {
+            print("Could not enable torch: \(error)")
+        }
+
+        self.videoDeviceInput.device.unlockForConfiguration()
         self.setupWriter(i: n)
         self.isRecording = true
 
@@ -542,6 +550,13 @@ class CameraViewController: UIViewController {
                 self.videoUrl[0] = nil
                 self.videoUrl[1] = nil
 
+                do {
+                    try self.videoDeviceInput.device.lockForConfiguration()
+                    self.videoDeviceInput.device.torchMode = .off
+                } catch {
+                    print("Could not disable torch: \(error)")
+                }
+                
                 self.recordButton.isEnabled = true
                 self.recordButton.setImage(#imageLiteral(resourceName: "CaptureVideo"), for: [])
             }
@@ -874,24 +889,25 @@ extension CameraViewController:
     AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
     //There is only one same method for both of these delegates
     fileprivate func write(_ didOutput: CMSampleBuffer, _ captureOutput: AVCaptureOutput, i: Int) {
-        let writable = canWrite(i: i)
+        guard canWrite(i: i) else {return}
         
-        if writable,
-            sessionAtSourceTime[i] == nil {
+        if sessionAtSourceTime[i] == nil {
             //Start writing
             sessionAtSourceTime[i] = CMSampleBufferGetPresentationTimeStamp(didOutput)
             videoWriter[i]?.startSession(atSourceTime: sessionAtSourceTime[i]!)
         }
         
-        if writable, captureOutput == videoDataOutput {
+        if captureOutput == videoDataOutput {
             
             if videoWriterInput[i]!.isReadyForMoreMediaData {
                 wf+=1
                 videoWriterInput[i]!.append(didOutput)
             }
-        } else if writable, captureOutput == audioDataOutput, audioWriterInput[i]!.isReadyForMoreMediaData {
-            wf+=1
-            audioWriterInput[i]!.append(didOutput)
+        } else if captureOutput == audioDataOutput {
+            if audioWriterInput[i]!.isReadyForMoreMediaData {
+                wf+=1
+                audioWriterInput[i]!.append(didOutput)
+            }
         }
     }
 
